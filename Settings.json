@@ -1,0 +1,18 @@
+{
+  "instance_name": "Pilares",
+  "instance_id": "Pilares",
+  "alerts_folder": "D:/Alerts",
+  "alerts_base_url": "",
+
+  "twilio_account_sid": "",
+  "twilio_auth_token": "",
+  "twilio_content_sid": "HX8726a00eed969aa513821533fc290144",
+  "twilio_from_whatsapp": "",
+  "recipients": [
+    ""
+  ],
+
+  "session_duration_hours": 24,
+  "template_cooldown_hours": 1,
+  "webhook_port": 5004
+} 
