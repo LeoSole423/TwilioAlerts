@@ -9,7 +9,7 @@ with open('Settings.json', 'r', encoding='utf-8') as f:
 directorio = settings.get('alerts_folder', r"D:\Alerts")
 
 # Puerto en el que se expondrá el servidor
-puerto = 8880
+puerto = settings.get('static_server_port', 8880)
 
 # Cambiamos el directorio actual al que querés exponer
 os.chdir(directorio)
