@@ -150,10 +150,7 @@ for dest in RECIPIENTS:
         media_param = {}
         if ALERTS_BASE_URL:
             filename = os.path.basename(image_path)
-            base = ALERTS_BASE_URL.rstrip('/')
-            if not base.startswith("http://") and not base.startswith("https://"):
-                base = "https://" + base
-            media_url = f"{base}/{filename}"
+            media_url = f"{ALERTS_BASE_URL.rstrip('/')}/{filename}"
             media_param = {"media_url": [media_url]}
             print(f"[DEBUG] media_url asignado: {media_url}")
         else:
