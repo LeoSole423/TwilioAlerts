@@ -1,12 +1,15 @@
 import http.server
 import socketserver
 import os
+import json
 
 # Ruta completa de la carpeta que querés exponer
-directorio = r"D:\Alerts"
+with open('Settings.json', 'r', encoding='utf-8') as f:
+    settings = json.load(f)
+directorio = settings.get('alerts_folder', r"D:\Alerts")
 
 # Puerto en el que se expondrá el servidor
-puerto = 8880
+puerto = settings.get('static_server_port', 8880)
 
 # Cambiamos el directorio actual al que querés exponer
 os.chdir(directorio)

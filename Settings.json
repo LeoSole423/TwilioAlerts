@@ -14,5 +14,6 @@
 
   "session_duration_hours": 24,
   "template_cooldown_hours": 1,
-  "webhook_port": 5004
+  "webhook_port": 5004,
+  "static_server_port": 8880
 } 
