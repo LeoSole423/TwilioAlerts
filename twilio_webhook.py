@@ -163,17 +163,46 @@ def webhook():
         print(f"[INFO] Mensaje descartado de {from_number}: no está en 'recipients'.")
         return ("<Response></Response>", 200, {"Content-Type": "application/xml"})
 
-    # Marcamos la sesión activa por 24 h a partir de ahora
+    # Texto del mensaje entrante normalizado
+    body_text = (request.values.get("Body") or "").strip()
+    command = body_text.upper()
+
+    # Estado actual del usuario
     state = load_state()
     user_state = state.get(from_number, {})
+
+    # Comandos de control de alertas
+    if command == "PARAR":
+        user_state["paused"] = True
+        state[from_number] = user_state
+        save_state(state)
+        print(f"[INFO] {from_number} pausó las alertas (PARAR)")
+        return ("<Response><Message>Has detenido las alertas. Envía ALERTAS para reanudarlas.</Message></Response>",
+                200, {"Content-Type": "application/xml"})
+
+    if command == "ALERTAS":
+        user_state["paused"] = False
+        user_state["session_until"] = (datetime.now(timezone.utc) + SESSION_DURATION).isoformat()
+        state[from_number] = user_state
+        save_state(state)
+        print(f"[INFO] {from_number} reanudó las alertas (ALERTAS)")
+        return ("<Response><Message>Alertas reanudadas por las próximas 24h.</Message></Response>",
+                200, {"Content-Type": "application/xml"})
+
+    # Mensajes normales: activar sesión y (si no está pausado) enviar última alerta
     user_state["session_until"] = (datetime.now(timezone.utc) + SESSION_DURATION).isoformat()
     state[from_number] = user_state
     save_state(state)
 
+    if user_state.get("paused"):
+        print(f"[INFO] {from_number} tiene alertas pausadas. No se envía alerta automática.")
+        return ("<Response><Message>Tus alertas están pausadas. Envía ALERTAS para reanudarlas.</Message></Response>",
+                200, {"Content-Type": "application/xml"})
+
     # Enviar alerta inmediata con imagen en segundo plano
     send_last_alert_async(from_number)
 
-    # Respondemos con un mensaje de cortesía opcional
+    # Respondemos con un mensaje de cortesía
     return ("<Response><Message>Recibido. Enviaremos alertas por las próximas 24h."  # noqa: E501
             "</Message></Response>", 200, {"Content-Type": "application/xml"})
 

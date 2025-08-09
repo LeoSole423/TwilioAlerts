@@ -140,6 +140,11 @@ skipped = 0
 
 for dest in RECIPIENTS:
     user_state = STATE.get(dest, {})
+    # Si el destinatario pausó las alertas, no enviar nada
+    if user_state.get("paused"):
+        skipped += 1
+        print(f"[SKIP] {dest} tiene alertas pausadas. No se envía mensaje.")
+        continue
     if session_active(user_state):
         # Enviar mensaje de sesión (económico)
         body = (

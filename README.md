@@ -64,6 +64,11 @@ python twilio_webhook.py
 ```
 Esto inicia un servidor Flask que responde a Twilio para activar sesiones de alerta.
 
+#### Comandos disponibles por WhatsApp
+
+- `PARAR`: Pausa las alertas para tu número. No recibirás más notificaciones hasta reanudarlas.
+- `ALERTAS`: Reanuda las alertas y activa una sesión por 24 horas.
+
 ### 3. Enviar alerta manualmente
 
 ```bash
