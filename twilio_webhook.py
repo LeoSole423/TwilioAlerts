@@ -18,9 +18,11 @@ if not os.path.exists(settings_path):
 with open(settings_path, "r", encoding="utf-8") as f:
     settings = json.load(f)
 
-SESSION_DURATION = timedelta(hours=settings.get("session_duration_hours", 24))
+SESSION_DURATION_HOURS = settings.get("session_duration_hours", 24)
+SESSION_DURATION = timedelta(hours=SESSION_DURATION_HOURS)
 
 app = Flask(__name__)
+LOCAL_TZ = timezone(timedelta(hours=-3))  # UTC-3
 
 # -------------------- Cliente Twilio --------------------
 ACCOUNT_SID = settings["twilio_account_sid"]
@@ -89,10 +91,11 @@ def send_last_alert(to_number: str):
     label = translate_label(label)
 
     event_ts = datetime.fromtimestamp(newest_entry.stat().st_mtime, tz=timezone.utc)
+    event_ts_local = event_ts.astimezone(LOCAL_TZ)
 
     body = (
         f"🔔 Alerta de movimiento en {settings.get('instance_name', 'Instancia')}\n"
-        f"🗓 Fecha y Hora: {event_ts.strftime('%Y-%m-%d %H:%M UTC')}\n"
+        f"🗓 Fecha y Hora: {event_ts_local.strftime('%Y-%m-%d %H:%M')} UTC-3\n"
         f"🔍 Objetos detectados: {label}"
     )
 
@@ -141,6 +144,18 @@ def save_state(state: dict):
         print(f"[WARN] No se pudo guardar el estado: {e}")
 
 
+def build_menu_message() -> str:
+    """Construye el mensaje de menú con los comandos disponibles."""
+    return (
+        "🤖 Menú de comandos disponibles:\n"
+        "- ALERTAS: activa o reanuda las alertas por las próximas "
+        f"{SESSION_DURATION_HOURS} horas.\n"
+        "- PARAR: pausa las alertas por 6 horas. Se reanudarán automáticamente.\n"
+        "- MENU o AYUDA: muestra este menú.\n\n"
+        "Las horas se muestran en UTC-3."
+    )
+
+
 @app.route("/webhook", methods=["POST"])
 def webhook():
     """Endpoint que Twilio llamará para los mensajes entrantes."""
@@ -171,40 +186,49 @@ def webhook():
     state = load_state()
     user_state = state.get(from_number, {})
 
+    # Auto-despausar si la pausa expiró
+    now_utc = datetime.now(timezone.utc)
+    paused_until_str = user_state.get("paused_until")
+    if paused_until_str:
+        try:
+            if datetime.fromisoformat(paused_until_str) <= now_utc:
+                user_state.pop("paused", None)
+                user_state.pop("paused_until", None)
+                state[from_number] = user_state
+                save_state(state)
+        except Exception:
+            pass
+
+    # Si no envió texto o envió un comando de menú/ayuda, responder con menú
+    if not command or command in {"MENU", "AYUDA", "HELP"}:
+        return (f"<Response><Message>{build_menu_message()}</Message></Response>",
+                200, {"Content-Type": "application/xml"})
+
     # Comandos de control de alertas
     if command == "PARAR":
         user_state["paused"] = True
+        resume_at_utc = now_utc + timedelta(hours=6)
+        user_state["paused_until"] = resume_at_utc.isoformat()
         state[from_number] = user_state
         save_state(state)
-        print(f"[INFO] {from_number} pausó las alertas (PARAR)")
-        return ("<Response><Message>Has detenido las alertas. Envía ALERTAS para reanudarlas.</Message></Response>",
+        resume_local = resume_at_utc.astimezone(LOCAL_TZ)
+        print(f"[INFO] {from_number} pausó las alertas (PARAR) hasta {resume_at_utc.isoformat()}")
+        return (f"<Response><Message>Alertas pausadas por 6 horas. Se reanudarán automáticamente a las {resume_local.strftime('%Y-%m-%d %H:%M')} UTC-3. Envía ALERTAS para reanudarlas antes.</Message></Response>",
                 200, {"Content-Type": "application/xml"})
 
     if command == "ALERTAS":
-        user_state["paused"] = False
-        user_state["session_until"] = (datetime.now(timezone.utc) + SESSION_DURATION).isoformat()
+        user_state.pop("paused", None)
+        user_state.pop("paused_until", None)
+        user_state["session_until"] = (now_utc + SESSION_DURATION).isoformat()
         state[from_number] = user_state
         save_state(state)
         print(f"[INFO] {from_number} reanudó las alertas (ALERTAS)")
-        return ("<Response><Message>Alertas reanudadas por las próximas 24h.</Message></Response>",
+        return (f"<Response><Message>Alertas reanudadas por las próximas {SESSION_DURATION_HOURS}h.</Message></Response>",
                 200, {"Content-Type": "application/xml"})
 
-    # Mensajes normales: activar sesión y (si no está pausado) enviar última alerta
-    user_state["session_until"] = (datetime.now(timezone.utc) + SESSION_DURATION).isoformat()
-    state[from_number] = user_state
-    save_state(state)
-
-    if user_state.get("paused"):
-        print(f"[INFO] {from_number} tiene alertas pausadas. No se envía alerta automática.")
-        return ("<Response><Message>Tus alertas están pausadas. Envía ALERTAS para reanudarlas.</Message></Response>",
-                200, {"Content-Type": "application/xml"})
-
-    # Enviar alerta inmediata con imagen en segundo plano
-    send_last_alert_async(from_number)
-
-    # Respondemos con un mensaje de cortesía
-    return ("<Response><Message>Recibido. Enviaremos alertas por las próximas 24h."  # noqa: E501
-            "</Message></Response>", 200, {"Content-Type": "application/xml"})
+    # Si no es comando reconocido, enviar menú y no activar sesión ni alerta
+    return (f"<Response><Message>{build_menu_message()}</Message></Response>",
+            200, {"Content-Type": "application/xml"})
 
 
 # -------------------- Hook global de logging --------------------
