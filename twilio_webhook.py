@@ -172,11 +172,13 @@ def webhook():
         abort(400)
 
     # ------- Filtro de remitentes permitidos -------
-    allowed_senders = set(settings.get("recipients", []))
+    # Normalizar remitentes permitidos (ignorar vacíos)
+    allowed_senders = {s.strip() for s in settings.get("recipients", []) if isinstance(s, str) and s.strip()}
+    print(f"[AUTH] From={from_number} Allowed={sorted(allowed_senders)}")
     if allowed_senders and from_number not in allowed_senders:
         # Descartamos silenciosamente (respondemos 200 para que Twilio no reintente)
         print(f"[INFO] Mensaje descartado de {from_number}: no está en 'recipients'.")
-        return ("<Response></Response>", 200, {"Content-Type": "application/xml"})
+        return ("<Response></Response>", 200, {"Content-Type": "text/xml"})
 
     # Texto del mensaje entrante normalizado
     body_text = (request.values.get("Body") or "").strip()
@@ -202,7 +204,7 @@ def webhook():
     # Si no envió texto o envió un comando de menú/ayuda, responder con menú
     if not command or command in {"MENU", "AYUDA", "HELP"}:
         return (f"<Response><Message>{build_menu_message()}</Message></Response>",
-                200, {"Content-Type": "application/xml"})
+                200, {"Content-Type": "text/xml"})
 
     # Comandos de control de alertas
     if command == "PARAR":
@@ -214,7 +216,7 @@ def webhook():
         resume_local = resume_at_utc.astimezone(LOCAL_TZ)
         print(f"[INFO] {from_number} pausó las alertas (PARAR) hasta {resume_at_utc.isoformat()}")
         return (f"<Response><Message>Alertas pausadas por 6 horas. Se reanudarán automáticamente a las {resume_local.strftime('%Y-%m-%d %H:%M')} UTC-3. Envía ALERTAS para reanudarlas antes.</Message></Response>",
-                200, {"Content-Type": "application/xml"})
+                200, {"Content-Type": "text/xml"})
 
     if command == "ALERTAS":
         user_state.pop("paused", None)
@@ -224,11 +226,11 @@ def webhook():
         save_state(state)
         print(f"[INFO] {from_number} reanudó las alertas (ALERTAS)")
         return (f"<Response><Message>Alertas reanudadas por las próximas {SESSION_DURATION_HOURS}h.</Message></Response>",
-                200, {"Content-Type": "application/xml"})
+                200, {"Content-Type": "text/xml"})
 
     # Si no es comando reconocido, enviar menú y no activar sesión ni alerta
     return (f"<Response><Message>{build_menu_message()}</Message></Response>",
-            200, {"Content-Type": "application/xml"})
+            200, {"Content-Type": "text/xml"})
 
 
 # -------------------- Hook global de logging --------------------
