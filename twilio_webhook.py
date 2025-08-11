@@ -5,6 +5,7 @@ import json
 from twilio.rest import Client
 from PIL import Image, ExifTags
 import threading
+from typing import Tuple
 
 # -------------------- Config --------------------
 BASE_DIR = os.path.dirname(__file__)
@@ -156,6 +157,20 @@ def build_menu_message() -> str:
     )
 
 
+def send_text_message(to_number: str, text: str) -> None:
+    """Envía un mensaje de WhatsApp de texto mediante la API de Twilio."""
+    try:
+        print(f"[SEND] -> {to_number}: {text[:120]}" + ("…" if len(text) > 120 else ""))
+        client.messages.create(
+            from_=FROM_WHATSAPP,
+            body=text,
+            to=to_number,
+        )
+        print(f"[OK] Mensaje enviado a {to_number}")
+    except Exception as e:
+        print(f"[ERR] Falló envío a {to_number}: {e}")
+
+
 @app.route("/webhook", methods=["POST"])
 def webhook():
     """Endpoint que Twilio llamará para los mensajes entrantes."""
@@ -178,7 +193,7 @@ def webhook():
     if allowed_senders and from_number not in allowed_senders:
         # Descartamos silenciosamente (respondemos 200 para que Twilio no reintente)
         print(f"[INFO] Mensaje descartado de {from_number}: no está en 'recipients'.")
-        return ("<Response></Response>", 200, {"Content-Type": "text/xml"})
+        return ("<Response></Response>", 200, {"Content-Type": "text/xml; charset=utf-8"})
 
     # Texto del mensaje entrante normalizado
     body_text = (request.values.get("Body") or "").strip()
@@ -203,8 +218,9 @@ def webhook():
 
     # Si no envió texto o envió un comando de menú/ayuda, responder con menú
     if not command or command in {"MENU", "AYUDA", "HELP"}:
-        return (f"<Response><Message>{build_menu_message()}</Message></Response>",
-                200, {"Content-Type": "text/xml"})
+        print(f"[FLOW] Comando de menú/ayuda recibido: '{command}' -> enviando menú")
+        send_text_message(from_number, build_menu_message())
+        return ("<Response></Response>", 200, {"Content-Type": "text/xml; charset=utf-8"})
 
     # Comandos de control de alertas
     if command == "PARAR":
@@ -215,8 +231,11 @@ def webhook():
         save_state(state)
         resume_local = resume_at_utc.astimezone(LOCAL_TZ)
         print(f"[INFO] {from_number} pausó las alertas (PARAR) hasta {resume_at_utc.isoformat()}")
-        return (f"<Response><Message>Alertas pausadas por 6 horas. Se reanudarán automáticamente a las {resume_local.strftime('%Y-%m-%d %H:%M')} UTC-3. Envía ALERTAS para reanudarlas antes.</Message></Response>",
-                200, {"Content-Type": "text/xml"})
+        send_text_message(
+            from_number,
+            f"Alertas pausadas por 6 horas. Se reanudarán automáticamente a las {resume_local.strftime('%Y-%m-%d %H:%M')} UTC-3. Envía ALERTAS para reanudarlas antes.",
+        )
+        return ("<Response></Response>", 200, {"Content-Type": "text/xml; charset=utf-8"})
 
     if command == "ALERTAS":
         user_state.pop("paused", None)
@@ -225,12 +244,13 @@ def webhook():
         state[from_number] = user_state
         save_state(state)
         print(f"[INFO] {from_number} reanudó las alertas (ALERTAS)")
-        return (f"<Response><Message>Alertas reanudadas por las próximas {SESSION_DURATION_HOURS}h.</Message></Response>",
-                200, {"Content-Type": "text/xml"})
+        send_text_message(from_number, f"Alertas reanudadas por las próximas {SESSION_DURATION_HOURS}h.")
+        return ("<Response></Response>", 200, {"Content-Type": "text/xml; charset=utf-8"})
 
     # Si no es comando reconocido, enviar menú y no activar sesión ni alerta
-    return (f"<Response><Message>{build_menu_message()}</Message></Response>",
-            200, {"Content-Type": "text/xml"})
+    print(f"[FLOW] Comando no reconocido: '{command}' -> enviando menú")
+    send_text_message(from_number, build_menu_message())
+    return ("<Response></Response>", 200, {"Content-Type": "text/xml; charset=utf-8"})
 
 
 # -------------------- Hook global de logging --------------------
