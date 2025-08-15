@@ -152,6 +152,7 @@ def build_menu_message() -> str:
         "- ALERTAS: activa o reanuda las alertas por las próximas "
         f"{SESSION_DURATION_HOURS} horas.\n"
         "- PARAR: pausa las alertas por 6 horas. Se reanudarán automáticamente.\n"
+        "- VER: solicita la imagen y datos de la última alerta registrada.\n"
         "- MENU o AYUDA: muestra este menú.\n\n"
         "Las horas se muestran en UTC-3."
     )
@@ -222,6 +223,13 @@ def webhook():
         send_text_message(from_number, build_menu_message())
         return ("<Response></Response>", 200, {"Content-Type": "text/xml; charset=utf-8"})
 
+    # Comando para solicitar la última alerta
+    if command == "VER":
+        print(f"[FLOW] {from_number} solicitó la última alerta (VER)")
+        send_last_alert_async(from_number)
+        # No enviamos confirmación para no duplicar mensajes; la alerta es la respuesta.
+        return ("<Response></Response>", 200, {"Content-Type": "text/xml; charset=utf-8"})
+
     # Comandos de control de alertas
     if command == "PARAR":
         user_state["paused"] = True
@@ -237,14 +245,22 @@ def webhook():
         )
         return ("<Response></Response>", 200, {"Content-Type": "text/xml; charset=utf-8"})
 
-    if command == "ALERTAS":
+    if command in {"ALERTAS", "MOSTRAR ALERTAS (24 HS)"}:
+        # Activar/reanudar sesión
         user_state.pop("paused", None)
         user_state.pop("paused_until", None)
         user_state["session_until"] = (now_utc + SESSION_DURATION).isoformat()
         state[from_number] = user_state
         save_state(state)
-        print(f"[INFO] {from_number} reanudó las alertas (ALERTAS)")
-        send_text_message(from_number, f"Alertas reanudadas por las próximas {SESSION_DURATION_HOURS}h.")
+        print(f"[INFO] {from_number} activó/reanudó alertas (comando: {command})")
+
+        # Si el comando viene del botón de la plantilla, enviar la última alerta
+        if command == "MOSTRAR ALERTAS (24 HS)":
+            send_last_alert_async(from_number)
+        else:
+            # Para el comando manual "ALERTAS", solo enviar confirmación
+            send_text_message(from_number, f"Alertas reanudadas por las próximas {SESSION_DURATION_HOURS}h.")
+
         return ("<Response></Response>", 200, {"Content-Type": "text/xml; charset=utf-8"})
 
     # Si no es comando reconocido, enviar menú y no activar sesión ni alerta
