@@ -10,6 +10,7 @@ urllib3.disable_warnings()  # Desactivar advertencias SSL
 
 # -------------------- Configuración --------------------
 BASE_DIR = os.path.dirname(__file__)
+LOCAL_TZ = timezone(timedelta(hours=-3))  # UTC-3
 
 # Cargar ajustes desde Settings.json (mismos que usa el código anterior)
 settings_path = os.path.join(BASE_DIR, "Settings.json")
@@ -111,6 +112,7 @@ label = translate_label(label)
 
 # Timestamp del evento
 event_ts = datetime.fromtimestamp(newest_entry.stat().st_mtime, tz=timezone.utc)
+event_ts_local = event_ts.astimezone(LOCAL_TZ)
 
 # -------------------- Lógica de envío --------------------
 STATE = load_state()
@@ -133,6 +135,22 @@ def session_active(user_state: dict) -> bool:
         return False
     return datetime.fromisoformat(session_until_str) > now
 
+def is_paused(user_state: dict, now_utc: datetime) -> bool:
+    """Retorna True si el usuario tiene pausa vigente. Limpia pausas expiradas."""
+    paused_until_str = user_state.get("paused_until")
+    if paused_until_str:
+        try:
+            paused_until = datetime.fromisoformat(paused_until_str)
+            if paused_until > now_utc:
+                return True
+            # Pausa expirada: limpiar banderas
+            user_state.pop("paused", None)
+            user_state.pop("paused_until", None)
+            return False
+        except Exception:
+            pass
+    return bool(user_state.get("paused"))
+
 # Contadores para logging
 sent_template = 0
 sent_session = 0
@@ -140,11 +158,27 @@ skipped = 0
 
 for dest in RECIPIENTS:
     user_state = STATE.get(dest, {})
+    # Auto-despausar si la pausa expiró
+    paused_until_str = user_state.get("paused_until")
+    if paused_until_str:
+        try:
+            if datetime.fromisoformat(paused_until_str) <= now:
+                user_state.pop("paused", None)
+                user_state.pop("paused_until", None)
+                STATE[dest] = user_state
+        except Exception:
+            pass
+
+    # Si el destinatario tiene pausa vigente, no enviar nada
+    if is_paused(user_state, now):
+        skipped += 1
+        print(f"[SKIP] {dest} tiene alertas pausadas. No se envía mensaje.")
+        continue
     if session_active(user_state):
         # Enviar mensaje de sesión (económico)
         body = (
             f"🔔 Alerta de movimiento en {INSTANCE_NAME}\n"
-            f"🗓 Fecha y Hora: {event_ts.strftime('%Y-%m-%d %H:%M UTC')}\n"
+            f"🗓 Fecha y Hora: {event_ts_local.strftime('%Y-%m-%d %H:%M')} UTC-3\n"
             f"🔍 Objetos detectados: {label}"
         )
         media_param = {}
@@ -174,7 +208,7 @@ for dest in RECIPIENTS:
         if should_send_template(user_state):
             variables = {
                 "1": INSTANCE_NAME,
-                "2": event_ts.strftime("%Y-%m-%d %H:%M"),
+                "2": f"{event_ts_local.strftime('%Y-%m-%d %H:%M')} UTC-3",
                 "3": label,
             }
             try:

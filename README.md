@@ -62,7 +62,13 @@ Esto expondrá la carpeta configurada en `alerts_folder` en la red local, en el 
 ```bash
 python twilio_webhook.py
 ```
-Esto inicia un servidor Flask que responde a Twilio para activar sesiones de alerta.
+Esto inicia un servidor Flask que responde a Twilio para activar sesiones de alerta y comandos.
+
+#### Comandos disponibles por WhatsApp
+
+- `PARAR`: Pausa las alertas por 6 horas para tu número. Se reanudarán automáticamente pasado ese tiempo (puedes reanudarlas antes con `ALERTAS`).
+- `ALERTAS`: Reanuda las alertas y activa una sesión por 24 horas.
+- `MENU` o `AYUDA`: Muestra el menú con los comandos disponibles.
 
 ### 3. Enviar alerta manualmente
 
@@ -75,6 +81,7 @@ Esto enviará la imagen más reciente de la carpeta de alertas a los destinatari
 
 - Asegúrate de que la URL de `alerts_base_url` sea accesible desde internet si Twilio debe acceder a las imágenes.
 - El archivo `user_state.json` guarda el estado de las sesiones y se crea automáticamente.
+- Las fechas y horas en los mensajes se muestran en UTC-3.
 - Puedes personalizar los textos y traducciones en el script `alerta_twilio.py`.
 
 ## Licencia
