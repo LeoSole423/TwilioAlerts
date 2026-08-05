@@ -19,7 +19,13 @@ pip install -r requirements.txt
 
 ## Configuración
 
-Edita el archivo `Settings.json` con tus datos:
+Primero crea tu configuración local desde el ejemplo y luego edita `Settings.json` con tus datos:
+
+```bash
+copy Settings.example.json Settings.json
+```
+
+`Settings.json` contiene credenciales y está excluido de Git; no lo subas al repositorio. Su contenido inicial es:
 
 ```json
 {
@@ -86,4 +92,4 @@ Esto enviará la imagen más reciente de la carpeta de alertas a los destinatari
 
 ## Licencia
 
-MIT 
+MIT

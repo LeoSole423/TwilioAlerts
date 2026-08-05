@@ -1,0 +1,7 @@
+# Configuración local y credenciales
+Settings.json
+user_state.json
+
+# Archivos generados por Python
+__pycache__/
+*.py[cod]

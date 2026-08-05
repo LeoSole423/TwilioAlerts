@@ -1,0 +1,17 @@
+{
+  "instance_name": "Nombre de la instancia",
+  "instance_id": "identificador-instancia",
+  "alerts_folder": "D:/Alerts",
+  "alerts_base_url": "http://TU_IP_LOCAL:8880",
+  "twilio_account_sid": "<tu_sid>",
+  "twilio_auth_token": "<tu_token>",
+  "twilio_content_sid": "<tu_content_sid>",
+  "twilio_from_whatsapp": "whatsapp:+14155238886",
+  "recipients": [
+    "whatsapp:+54911..."
+  ],
+  "session_duration_hours": 24,
+  "template_cooldown_hours": 1,
+  "webhook_port": 5004,
+  "static_server_port": 8880
+}
