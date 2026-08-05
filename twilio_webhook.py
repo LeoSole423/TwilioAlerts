@@ -6,6 +6,7 @@ from twilio.rest import Client
 from PIL import Image, ExifTags
 import threading
 from typing import Tuple
+from message_stats import build_counter_message, record_message_sent
 
 # -------------------- Config --------------------
 BASE_DIR = os.path.dirname(__file__)
@@ -116,6 +117,7 @@ def send_last_alert(to_number: str):
             to=to_number,
             **media_param,
         )
+        record_message_sent()
         print(f"[OK] Alerta enviada a {to_number}")
     except Exception as e:
         print(f"[ERR] No se pudo enviar la alerta a {to_number}: {e}")
@@ -151,6 +153,7 @@ def build_menu_message() -> str:
         "🤖 Menú de comandos disponibles:\n"
         "- ALERTAS: activa o reanuda las alertas por las próximas "
         f"{SESSION_DURATION_HOURS} horas.\n"
+        "- CONTADOR: muestra los mensajes enviados durante los últimos 3 meses.\n"
         "- PARAR: pausa las alertas por 6 horas. Se reanudarán automáticamente.\n"
         "- VER: solicita la imagen y datos de la última alerta registrada.\n"
         "- MENU o AYUDA: muestra este menú.\n\n"
@@ -167,6 +170,7 @@ def send_text_message(to_number: str, text: str) -> None:
             body=text,
             to=to_number,
         )
+        record_message_sent()
         print(f"[OK] Mensaje enviado a {to_number}")
     except Exception as e:
         print(f"[ERR] Falló envío a {to_number}: {e}")
@@ -199,6 +203,11 @@ def webhook():
     # Texto del mensaje entrante normalizado
     body_text = (request.values.get("Body") or "").strip()
     command = body_text.upper()
+
+    if command == "CONTADOR":
+        print(f"[FLOW] {from_number} solicitó el contador de mensajes")
+        send_text_message(from_number, build_counter_message())
+        return ("<Response></Response>", 200, {"Content-Type": "text/xml; charset=utf-8"})
 
     # Estado actual del usuario
     state = load_state()

@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from PIL import Image, ExifTags
 from twilio.rest import Client
 import urllib3
+from message_stats import record_message_sent
 
 urllib3.disable_warnings()  # Desactivar advertencias SSL
 
@@ -197,6 +198,7 @@ for dest in RECIPIENTS:
                 to=dest,
                 **media_param,
             )
+            record_message_sent()
             sent_session += 1
             # Actualizar estado
             user_state["last_event_sent"] = now.isoformat()
@@ -218,6 +220,7 @@ for dest in RECIPIENTS:
                     content_variables=json.dumps(variables),
                     to=dest,
                 )
+                record_message_sent()
                 sent_template += 1
                 # Guardar timestamp de la plantilla
                 user_state["last_template_sent"] = now.isoformat()
@@ -234,4 +237,4 @@ save_state(STATE)
 
 print(
     f"Resumen -> Plantillas: {sent_template}, Sesión: {sent_session}, Omitidos: {skipped}"
-) 
+)

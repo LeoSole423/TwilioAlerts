@@ -1,6 +1,8 @@
 # Configuración local y credenciales
 Settings.json
 user_state.json
+message_stats.sqlite3
+message_stats.sqlite3-*
 
 # Archivos generados por Python
 __pycache__/
