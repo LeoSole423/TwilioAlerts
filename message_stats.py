@@ -104,6 +104,42 @@ def get_recent_counts(
     return [(key, int(counts.get(key, 0))) for key in keys]
 
 
+def get_latest_recorded_counts(
+    limit: int = 3,
+    db_path: Optional[str] = None,
+) -> List[Tuple[str, int]]:
+    """Lee hasta ``limit`` meses con mensajes, sin crear ni modificar la base SQLite."""
+    if limit < 1:
+        raise ValueError("limit debe ser al menos 1")
+
+    path = os.path.abspath(db_path or STATS_FILE)
+    if not os.path.exists(path):
+        return []
+
+    connection = None
+    try:
+        database_uri = "file:{}?mode=ro".format(path.replace("\\", "/"))
+        connection = sqlite3.connect(database_uri, uri=True, timeout=5)
+        rows = connection.execute(
+            """
+            SELECT month, sent_count
+            FROM monthly_message_counts
+            WHERE sent_count > 0
+            ORDER BY month DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+    except sqlite3.Error as error:
+        print(f"[WARN] No se pudo leer el historial de mensajes: {error}")
+        return []
+    finally:
+        if connection is not None:
+            connection.close()
+
+    return [(str(month), int(count)) for month, count in reversed(rows)]
+
+
 def month_label(key: str) -> str:
     """Convierte una clave YYYY-MM en un nombre de mes legible en español."""
     year, month = key.split("-", 1)

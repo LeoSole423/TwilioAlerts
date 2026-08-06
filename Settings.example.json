@@ -1,6 +1,6 @@
 {
   "instance_name": "Nombre de la instancia",
-  "instance_id": "identificador-instancia",
+  "instance_id": "Pilares",
   "alerts_folder": "D:/Alerts",
   "alerts_base_url": "http://TU_IP_LOCAL:8880",
   "twilio_account_sid": "<tu_sid>",
@@ -13,5 +13,10 @@
   "session_duration_hours": 24,
   "template_cooldown_hours": 1,
   "webhook_port": 5004,
-  "static_server_port": 8880
+  "static_server_port": 8880,
+  "pilares_sync_enabled": true,
+  "pilares_sync_url": "https://n8n.aeye.com.ar/webhook/pilares-counter-v1",
+  "pilares_sync_token": "<TOKEN_SECRETO>",
+  "pilares_sync_interval_seconds": 300,
+  "pilares_sync_timeout_seconds": 8
 }

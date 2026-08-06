@@ -79,7 +79,7 @@ class WebhookCounterCommandTests(unittest.TestCase):
         original_state = Path(self.state_path).read_text(encoding="utf-8")
         with mock.patch("message_stats.STATS_FILE", self.stats_path), mock.patch.object(
             self.webhook.client.messages, "create"
-        ) as create_message:
+        ) as create_message, mock.patch.object(self.webhook, "sync_pilares_now") as sync:
             response = self.webhook.app.test_client().post(
                 "/webhook", data={"From": self.sender, "Body": "CONTADOR"}
             )
@@ -88,16 +88,18 @@ class WebhookCounterCommandTests(unittest.TestCase):
         self.assertEqual(Path(self.state_path).read_text(encoding="utf-8"), original_state)
         self.assertEqual(get_recent_counts(db_path=self.stats_path)[0][1], 1)
         self.assertIn("Mensajes enviados", create_message.call_args.kwargs["body"])
+        sync.assert_called_once_with()
 
     def test_failed_command_response_is_not_counted(self):
         with mock.patch("message_stats.STATS_FILE", self.stats_path), mock.patch.object(
             self.webhook.client.messages, "create", side_effect=RuntimeError("Twilio error")
-        ):
+        ), mock.patch.object(self.webhook, "sync_pilares_now") as sync:
             self.webhook.app.test_client().post(
                 "/webhook", data={"From": self.sender, "Body": "CONTADOR"}
             )
 
         self.assertEqual(get_recent_counts(db_path=self.stats_path)[0][1], 0)
+        sync.assert_not_called()
 
 
 if __name__ == "__main__":

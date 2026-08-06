@@ -6,6 +6,7 @@ from PIL import Image, ExifTags
 from twilio.rest import Client
 import urllib3
 from message_stats import record_message_sent
+from pilares_sync import sync_pilares_now
 
 urllib3.disable_warnings()  # Desactivar advertencias SSL
 
@@ -198,7 +199,8 @@ for dest in RECIPIENTS:
                 to=dest,
                 **media_param,
             )
-            record_message_sent()
+            if record_message_sent():
+                sync_pilares_now()
             sent_session += 1
             # Actualizar estado
             user_state["last_event_sent"] = now.isoformat()
@@ -220,7 +222,8 @@ for dest in RECIPIENTS:
                     content_variables=json.dumps(variables),
                     to=dest,
                 )
-                record_message_sent()
+                if record_message_sent():
+                    sync_pilares_now()
                 sent_template += 1
                 # Guardar timestamp de la plantilla
                 user_state["last_template_sent"] = now.isoformat()

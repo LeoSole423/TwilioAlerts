@@ -7,6 +7,7 @@ from PIL import Image, ExifTags
 import threading
 from typing import Tuple
 from message_stats import build_counter_message, record_message_sent
+from pilares_sync import start_periodic_sync, sync_pilares_now
 
 # -------------------- Config --------------------
 BASE_DIR = os.path.dirname(__file__)
@@ -117,7 +118,8 @@ def send_last_alert(to_number: str):
             to=to_number,
             **media_param,
         )
-        record_message_sent()
+        if record_message_sent():
+            sync_pilares_now()
         print(f"[OK] Alerta enviada a {to_number}")
     except Exception as e:
         print(f"[ERR] No se pudo enviar la alerta a {to_number}: {e}")
@@ -170,7 +172,8 @@ def send_text_message(to_number: str, text: str) -> None:
             body=text,
             to=to_number,
         )
-        record_message_sent()
+        if record_message_sent():
+            sync_pilares_now()
         print(f"[OK] Mensaje enviado a {to_number}")
     except Exception as e:
         print(f"[ERR] Falló envío a {to_number}: {e}")
@@ -293,4 +296,5 @@ def log_any_request():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", settings.get("webhook_port", 5000)))
+    start_periodic_sync()
     app.run(host="0.0.0.0", port=port) 
