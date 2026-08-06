@@ -7,6 +7,7 @@ from twilio.rest import Client
 import urllib3
 from message_stats import record_message_sent
 from pilares_sync import sync_pilares_now
+from alert_filter import CameraLock, camera_from_filename, evaluate_alert, remember_sent_alert
 
 urllib3.disable_warnings()  # Desactivar advertencias SSL
 
@@ -115,6 +116,8 @@ label = translate_label(label)
 # Timestamp del evento
 event_ts = datetime.fromtimestamp(newest_entry.stat().st_mtime, tz=timezone.utc)
 event_ts_local = event_ts.astimezone(LOCAL_TZ)
+event_ts_seconds = newest_entry.stat().st_mtime
+camera_name = camera_from_filename(newest_entry.name)
 
 # -------------------- Lógica de envío --------------------
 STATE = load_state()
@@ -157,8 +160,31 @@ def is_paused(user_state: dict, now_utc: datetime) -> bool:
 sent_template = 0
 sent_session = 0
 skipped = 0
+filtered = 0
+sent_any_alert = False
 
-for dest in RECIPIENTS:
+filter_lock = None
+filter_blocked = False
+if settings.get("alert_filter_enabled", False) and camera_name:
+    filter_lock = CameraLock(camera_name)
+    if not filter_lock.acquire():
+        filter_blocked = True
+        filtered = 1
+        print(f"[FILTER] Alerta descartada: {camera_name}, otra ejecución está procesando esta cámara.")
+    else:
+        decision = evaluate_alert(camera_name, newest_entry.name, event_ts_seconds, settings)
+        if decision.would_filter:
+            elapsed = "" if decision.elapsed_seconds is None else f", transcurrieron {decision.elapsed_seconds:.1f}s"
+            if decision.should_send:
+                print(f"[FILTER] Log-only: {camera_name} habría sido descartada ({decision.reason}{elapsed}).")
+            else:
+                filter_blocked = True
+                filtered = 1
+                print(f"[FILTER] Alerta descartada: {camera_name} ({decision.reason}{elapsed}).")
+elif settings.get("alert_filter_enabled", False):
+    print("[FILTER] No se pudo identificar la cámara; se enviará la alerta sin filtrar.")
+
+for dest in RECIPIENTS if not filter_blocked else []:
     user_state = STATE.get(dest, {})
     # Auto-despausar si la pausa expiró
     paused_until_str = user_state.get("paused_until")
@@ -199,6 +225,7 @@ for dest in RECIPIENTS:
                 to=dest,
                 **media_param,
             )
+            sent_any_alert = True
             if record_message_sent():
                 sync_pilares_now()
             sent_session += 1
@@ -222,6 +249,7 @@ for dest in RECIPIENTS:
                     content_variables=json.dumps(variables),
                     to=dest,
                 )
+                sent_any_alert = True
                 if record_message_sent():
                     sync_pilares_now()
                 sent_template += 1
@@ -235,9 +263,15 @@ for dest in RECIPIENTS:
             skipped += 1
             print(f"[SKIP] Se omitió envío a {dest}: plantilla enviada hace menos de {TEMPLATE_COOLDOWN} h y sin sesión activa.")
 
+# Persistir el filtro solo tras un envío confirmado por Twilio.
+if sent_any_alert and filter_lock is not None:
+    remember_sent_alert(camera_name, newest_entry.name, event_ts_seconds, settings)
+if filter_lock is not None:
+    filter_lock.release()
+
 # Guardar estado actualizado
 save_state(STATE)
 
 print(
-    f"Resumen -> Plantillas: {sent_template}, Sesión: {sent_session}, Omitidos: {skipped}"
+    f"Resumen -> Plantillas: {sent_template}, Sesión: {sent_session}, Omitidos: {skipped}, Filtrados: {filtered}"
 )

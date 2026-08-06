@@ -4,6 +4,9 @@ user_state.json
 message_stats.sqlite3
 message_stats.sqlite3-*
 pilares_sync.lock
+alert_filter.sqlite3
+alert_filter.sqlite3-*
+alert_filter_*.lock
 
 # Archivos generados por Python
 __pycache__/
