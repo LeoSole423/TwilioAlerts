@@ -11,8 +11,8 @@ from message_stats import BASE_DIR
 
 
 FILTER_DB = os.path.join(BASE_DIR, "alert_filter.sqlite3")
-LOCK_DIRECTORY = BASE_DIR
-DEFAULT_WINDOW_SECONDS = 10.0
+LOCK_DIRECTORY = os.path.join(BASE_DIR, ".runtime", "alert_locks")
+DEFAULT_WINDOW_SECONDS = 30.0
 
 
 @dataclass(frozen=True)
@@ -101,6 +101,26 @@ def _connect(db_path: str) -> sqlite3.Connection:
         )
         """
     )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS discarded_alert_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            camera TEXT NOT NULL,
+            image_name TEXT NOT NULL,
+            event_timestamp REAL NOT NULL,
+            reason TEXT NOT NULL,
+            elapsed_seconds REAL,
+            discarded_at TEXT NOT NULL
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_discarded_alert_history_camera_time
+        ON discarded_alert_history (camera, discarded_at)
+        """
+    )
+    connection.commit()
     return connection
 
 
@@ -141,7 +161,7 @@ def evaluate_alert(
         return _apply_log_only(settings, "stale_event")
 
     elapsed = event_timestamp - float(last_event_ts)
-    if elapsed < _positive_window(settings.get("alert_filter_window_seconds")):
+    if elapsed <= _positive_window(settings.get("alert_filter_window_seconds")):
         return _apply_log_only(settings, "cooldown", elapsed)
     return FilterDecision(True, False, "window_elapsed", elapsed)
 
@@ -182,6 +202,75 @@ def remember_sent_alert(
     except sqlite3.Error as error:
         print(f"[WARN] No se pudo guardar el filtro de alertas: {error}")
         return False
+    finally:
+        if connection is not None:
+            connection.close()
+
+
+def record_discarded_alert(
+    camera: Optional[str],
+    image_name: str,
+    event_timestamp: float,
+    reason: str,
+    elapsed_seconds: Optional[float] = None,
+    db_path: str = FILTER_DB,
+) -> bool:
+    """Agrega al historial una alerta que fue descartada realmente."""
+    if not camera:
+        return False
+
+    connection = None
+    try:
+        connection = _connect(db_path)
+        connection.execute(
+            """
+            INSERT INTO discarded_alert_history (
+                camera,
+                image_name,
+                event_timestamp,
+                reason,
+                elapsed_seconds,
+                discarded_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                camera,
+                image_name,
+                event_timestamp,
+                reason,
+                elapsed_seconds,
+                datetime.now(timezone.utc).isoformat(),
+            ),
+        )
+        connection.commit()
+        return True
+    except sqlite3.Error as error:
+        print(f"[WARN] No se pudo guardar el historial de alertas descartadas: {error}")
+        return False
+    finally:
+        if connection is not None:
+            connection.close()
+
+
+def get_discarded_alerts(limit: int = 100, db_path: str = FILTER_DB):
+    """Devuelve los descartes más recientes, del más nuevo al más antiguo."""
+    safe_limit = max(1, int(limit))
+    connection = None
+    try:
+        connection = _connect(db_path)
+        return connection.execute(
+            """
+            SELECT camera, image_name, event_timestamp, reason, elapsed_seconds, discarded_at
+            FROM discarded_alert_history
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (safe_limit,),
+        ).fetchall()
+    except (sqlite3.Error, TypeError, ValueError) as error:
+        print(f"[WARN] No se pudo consultar el historial de alertas descartadas: {error}")
+        return []
     finally:
         if connection is not None:
             connection.close()

@@ -7,7 +7,13 @@ from twilio.rest import Client
 import urllib3
 from message_stats import record_message_sent
 from pilares_sync import sync_pilares_now
-from alert_filter import CameraLock, camera_from_filename, evaluate_alert, remember_sent_alert
+from alert_filter import (
+    CameraLock,
+    camera_from_filename,
+    evaluate_alert,
+    record_discarded_alert,
+    remember_sent_alert,
+)
 
 urllib3.disable_warnings()  # Desactivar advertencias SSL
 
@@ -170,6 +176,12 @@ if settings.get("alert_filter_enabled", False) and camera_name:
     if not filter_lock.acquire():
         filter_blocked = True
         filtered = 1
+        record_discarded_alert(
+            camera_name,
+            newest_entry.name,
+            event_ts_seconds,
+            "camera_busy",
+        )
         print(f"[FILTER] Alerta descartada: {camera_name}, otra ejecución está procesando esta cámara.")
     else:
         decision = evaluate_alert(camera_name, newest_entry.name, event_ts_seconds, settings)
@@ -180,6 +192,13 @@ if settings.get("alert_filter_enabled", False) and camera_name:
             else:
                 filter_blocked = True
                 filtered = 1
+                record_discarded_alert(
+                    camera_name,
+                    newest_entry.name,
+                    event_ts_seconds,
+                    decision.reason,
+                    decision.elapsed_seconds,
+                )
                 print(f"[FILTER] Alerta descartada: {camera_name} ({decision.reason}{elapsed}).")
 elif settings.get("alert_filter_enabled", False):
     print("[FILTER] No se pudo identificar la cámara; se enviará la alerta sin filtrar.")

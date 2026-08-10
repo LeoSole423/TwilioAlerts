@@ -91,7 +91,7 @@ Esto enviará la imagen más reciente de la carpeta de alertas a los destinatari
 - El archivo `user_state.json` guarda el estado de las sesiones y se crea automáticamente.
 - El archivo local `message_stats.sqlite3` conserva el contador mensual de mensajes enviados; se reinicia automáticamente al comenzar cada mes y mantiene el historial anterior.
 - Si `pilares_sync_enabled` está activo, el contador se sincroniza con n8n después de cada mensaje enviado y también al iniciar el webhook, con reintentos periódicos. Configura `pilares_sync_token` únicamente en tu `Settings.json` local.
-- `alert_filter_enabled` evita alertas automáticas repetidas de la misma cámara. Por defecto usa una ventana de 10 segundos (`alert_filter_window_seconds`) y descarta realmente los repetidos (`alert_filter_log_only: false`). Las solicitudes manuales como `VER` no se filtran.
+- `alert_filter_enabled` evita alertas automáticas repetidas de la misma cámara. Por defecto usa una ventana de 30 segundos (`alert_filter_window_seconds`) y descarta realmente los repetidos (`alert_filter_log_only: false`). Las solicitudes manuales como `VER` no se filtran. Cada descarte real queda registrado en la tabla `discarded_alert_history` de `alert_filter.sqlite3`; los locks internos se guardan fuera de la vista principal en `.runtime/alert_locks/`.
 - Las fechas y horas en los mensajes se muestran en UTC-3.
 - Puedes personalizar los textos y traducciones en el script `alerta_twilio.py`.
 

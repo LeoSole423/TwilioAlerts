@@ -16,7 +16,7 @@
   "static_server_port": 8880,
   "pilares_sync_enabled": true,
   "alert_filter_enabled": true,
-  "alert_filter_window_seconds": 10,
+  "alert_filter_window_seconds": 30,
   "alert_filter_log_only": false,
   "pilares_sync_url": "https://n8n.aeye.com.ar/webhook/pilares-counter-v1",
   "pilares_sync_token": "<TOKEN_SECRETO>",
